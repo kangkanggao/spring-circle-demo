@@ -9,7 +9,6 @@ import com.highlion.util.ReflectionUtils;
 
 import java.lang.reflect.Method;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
@@ -21,8 +20,6 @@ public class AspectUtils {
     private static Map<String, Method> advisorBeforeMap = new HashMap<>();
 
     private static Map<String, Method> advisorAfterMap = new HashMap<>();
-
-    private static Set<String> aspectBeanNameSet = new HashSet<>();
 
     static {
         Set<Class<?>> aspectSet = ReflectionUtils.getAllClass(Aspect.class);
@@ -64,11 +61,6 @@ public class AspectUtils {
     public static Object getAdvisorInstance(Class<?> clazz) {
         return advisorInstanceMap.get(clazz);
     }
-
-    public static Set<String> getAspectBeanNameSet() {
-        return aspectBeanNameSet;
-    }
-
 
     public static Map<String, Method> getAdvisorBeforeMap() {
         return advisorBeforeMap;

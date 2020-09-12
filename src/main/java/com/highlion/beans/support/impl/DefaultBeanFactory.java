@@ -17,6 +17,7 @@ import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class DefaultBeanFactory extends SingletonBeanRegistry implements BeanFactory {
@@ -33,14 +34,12 @@ public class DefaultBeanFactory extends SingletonBeanRegistry implements BeanFac
         this.beanPostProcessors.add(beanPostProcessor);
     }
 
-    public List<BeanPostProcessor> getBeanPostProcessors() {
+    private List<BeanPostProcessor> getBeanPostProcessors() {
         return beanPostProcessors;
     }
 
     public void preInstantiateSingletons() {
-        this.beanDefinitionMap.forEach((beanName, beanDef) -> {
-            getBean(beanName);
-        });
+        this.beanDefinitionMap.forEach((beanName, beanDef) -> getBean(beanName));
     }
 
     @Override
@@ -98,18 +97,13 @@ public class DefaultBeanFactory extends SingletonBeanRegistry implements BeanFac
         return exposedObject;
     }
 
-    protected Object initializeBean(final Object bean, final String beanName) {
-
+    private Object initializeBean(final Object bean, final String beanName) {
         Object wrappedBean = bean;
-
-
         wrappedBean = applyBeanPostProcessorsAfterInitialization(wrappedBean, beanName);
-
         return wrappedBean;
     }
 
-    public Object applyBeanPostProcessorsAfterInitialization(Object existingBean, String beanName) {
-
+    private Object applyBeanPostProcessorsAfterInitialization(Object existingBean, String beanName) {
         Object result = existingBean;
         for (BeanPostProcessor processor : getBeanPostProcessors()) {
             Object current = processor.postProcessAfterInitialization(result, beanName);
@@ -121,7 +115,7 @@ public class DefaultBeanFactory extends SingletonBeanRegistry implements BeanFac
         return result;
     }
 
-    public Object getEarlyBeanReference(String beanName, Object bean) {
+    private Object getEarlyBeanReference(String beanName, Object bean) {
         Object exposedObject = bean;
         // 如果是代理 Spring 会去执行 AnnotationAwareAspectJAutoProxyCreator后置处理器去处理
         // 这里直接就简单用 DefaultAdvisorAutoProxyCreator 处理器去处理
@@ -181,5 +175,10 @@ public class DefaultBeanFactory extends SingletonBeanRegistry implements BeanFac
     @Override
     public boolean containsBean(String name) {
         return this.containsSingleton(name) || this.containsBeanDefinition(name);
+    }
+
+    @Override
+    public Set<String> getRegisteredSingletons() {
+        return super.getRegisteredSingletons();
     }
 }

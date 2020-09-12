@@ -25,7 +25,7 @@ public class ApplicationContext implements BeanFactory {
         beanFactory.addBeanPostProcessor(new DefaultAdvisorAutoProxyCreator());
     }
 
-    public void finishBeanFactoryInitialization(DefaultBeanFactory beanFactory) {
+    private void finishBeanFactoryInitialization(DefaultBeanFactory beanFactory) {
         beanFactory.preInstantiateSingletons();
     }
 
@@ -44,7 +44,7 @@ public class ApplicationContext implements BeanFactory {
         return getBeanFactory().containsBean(name);
     }
 
-    public DefaultBeanFactory getBeanFactory() {
+    private DefaultBeanFactory getBeanFactory() {
         return beanFactory;
     }
 }

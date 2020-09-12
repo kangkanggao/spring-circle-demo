@@ -18,7 +18,9 @@ public class SingletonBeanRegistry {
     private final Map<String, ObjectFactory<?>> singletonFactories = new HashMap<>();
 
 
-    /** Set of registered singletons, containing the bean names in registration order. */
+    /**
+     * Set of registered singletons, containing the bean names in registration order.
+     */
     private final Set<String> registeredSingletons = new LinkedHashSet<>(256);
 
     private final Set<String> singletonsCurrentlyInCreation = Collections.newSetFromMap(new ConcurrentHashMap<>());
@@ -75,7 +77,7 @@ public class SingletonBeanRegistry {
         }
     }
 
-    protected void addSingleton(String beanName, Object singletonObject) {
+    private void addSingleton(String beanName, Object singletonObject) {
         synchronized (this.singletonObjects) {
             this.singletonObjects.put(beanName, (singletonObject != null ? singletonObject : NULL_OBJECT));
             this.singletonFactories.remove(beanName);
@@ -95,13 +97,13 @@ public class SingletonBeanRegistry {
         }
     }
 
-    protected void beforeSinlgetonCreation(String beanName) {
+    private void beforeSinlgetonCreation(String beanName) {
         if (!this.inCreationCheckExclusions.contains(beanName) && !this.singletonsCurrentlyInCreation.add(beanName)) {
             throw new GlobalException(beanName);
         }
     }
 
-    protected void afterSingletonCreation(String beanName) {
+    private void afterSingletonCreation(String beanName) {
         if (!this.inCreationCheckExclusions.contains(beanName) && !this.singletonsCurrentlyInCreation.remove(beanName)) {
             throw new IllegalStateException("Singleton '" + beanName + "' isn't currently in creation");
         }
@@ -122,5 +124,9 @@ public class SingletonBeanRegistry {
 
     protected boolean containsSingleton(String name) {
         return this.singletonObjects.containsKey(name);
+    }
+
+    protected Set<String> getRegisteredSingletons() {
+        return registeredSingletons;
     }
 }
