@@ -14,7 +14,12 @@ public class BService {
     @Resource
     private CService cService;
 
+    public CService getcService() {
+        return cService;
+    }
+
     public void test() {
+        System.out.println(cService);
         System.out.println("testB");
     }
 }

@@ -14,6 +14,10 @@ public class CService {
     @Resource
     private AService aService;
 
+    public AService getaService() {
+        return aService;
+    }
+
     public String getCString() {
         System.out.println("cccccccccc");
         return "ok";

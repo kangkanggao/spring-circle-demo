@@ -1,5 +1,7 @@
 package com.highlion.aop.proxy;
 import com.highlion.aop.util.AspectUtils;
+import com.highlion.exception.GlobalException;
+import com.sun.istack.internal.Nullable;
 import net.sf.cglib.proxy.MethodInterceptor;
 import net.sf.cglib.proxy.MethodProxy;
 
@@ -20,13 +22,30 @@ public class DefaultBeanProxy implements MethodInterceptor {
             beforeMethod.invoke(AspectUtils.getAdvisorInstance(beforeMethod.getDeclaringClass()), args);
         }
 
-        Object result = methodProxy.invokeSuper(object, args);
-
+        Object retVal = methodProxy.invoke(this.target, args);
         Method afterMethod = AspectUtils.getAfterAdvisorMethod(method.getName());
         if (afterMethod != null) {
             afterMethod.invoke(AspectUtils.getAdvisorInstance(afterMethod.getDeclaringClass()), args);
         }
-
-        return result;
+        return processReturnType(methodProxy, this.target, method, retVal);
     }
+
+
+    private static Object processReturnType(
+            Object proxy, @Nullable Object target, Method method, @Nullable Object returnValue) {
+
+        // Massage return value if necessary
+        if (returnValue != null && returnValue == target) {
+            // Special case: it returned "this". Note that we can't help
+            // if the target sets a reference to itself in another returned object.
+            returnValue = proxy;
+        }
+        Class<?> returnType = method.getReturnType();
+        if (returnValue == null && returnType != Void.TYPE && returnType.isPrimitive()) {
+            throw new GlobalException(
+                    "Null return value from advice does not match primitive return type for: " + method);
+        }
+        return returnValue;
+    }
+
 }

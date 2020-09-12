@@ -13,8 +13,12 @@ public class AService {
     @Resource
     private BService bService;
 
-    public String getString(String objectFactory) {
-        System.out.println("aaaaaaaaa" + objectFactory);
-        return objectFactory;
+    public BService getbService() {
+        return bService;
+    }
+
+    public String getString() {
+        bService.test();
+        return "aaaaaaa";
     }
 }

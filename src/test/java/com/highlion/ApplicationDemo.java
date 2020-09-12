@@ -18,10 +18,11 @@ public class ApplicationDemo {
         BService bService = applicationContext.getBean(BService.class);
         CService cService = applicationContext.getBean(CService.class);
 
-        System.out.println(aService);
-        System.out.println(bService);
-        System.out.println(cService);
+        System.out.println(aService.getbService());
+        System.out.println(bService.getcService());
+        System.out.println(cService.getaService());
         cService.test();
         bService.test();
+        aService.getString();
     }
 }
