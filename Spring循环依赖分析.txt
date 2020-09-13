@@ -1,4 +1,4 @@
-在test里写三个类模拟循环依赖
+写三个类模拟循环依赖
 
 AService  AOP代理
 BService
