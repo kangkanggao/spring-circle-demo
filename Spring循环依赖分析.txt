@@ -1,0 +1,323 @@
+写三个类模拟循环依赖
+
+AService  AOP代理
+BService
+CService  AOP代理
+
+aService 依赖bService 
+bService 依赖cService
+cService 依赖aService
+-----------------------
+1. AbstractBeanFactory
+   1.1  doGetBean
+2.DefaultSingletonBeanRegistry
+  2.1 先从缓存中拿
+    protected Object getSingleton(String beanName, boolean allowEarlyReference) {
+	    一级缓存
+		Object singletonObject = this.singletonObjects.get(beanName);
+		一级缓存没有 并且 正在创建的bean   第一次进入改方法 肯定不是 正在创建
+		if (singletonObject == null && isSingletonCurrentlyInCreation(beanName)) {
+			synchronized (this.singletonObjects) {
+			    二级缓存获取
+				singletonObject = this.earlySingletonObjects.get(beanName);
+				二级缓存没有获取到 并且提前引用
+				if (singletonObject == null && allowEarlyReference) {
+				    从三级缓存中获取
+					ObjectFactory<?> singletonFactory = this.singletonFactories.get(beanName);
+					if (singletonFactory != null) {
+					    从三级缓存的getObject方法中获取 获取 调用匿名内部类的getEarlyBeanReference(String beanName, RootBeanDefinition mbd, Object bean)方法 获取代理的bean或者普通的bean(获取的是属性bean的代理或者原生)
+						singletonObject = singletonFactory.getObject();
+						放入二级缓存
+						this.earlySingletonObjects.put(beanName, singletonObject);
+						this.singletonFactories.remove(beanName);
+					}
+				}
+			}
+		}
+		return singletonObject;  所以直接返回null
+	}
+3.AbstractBeanFactory
+  3.1 创建单例if (mbd.isSingleton())
+4.DefaultSingletonBeanRegistry
+  4.1 获取单例缓存
+  	public Object getSingleton(String beanName, ObjectFactory<?> singletonFactory) {
+		synchronized (this.singletonObjects) {
+		    从一级缓存中获取
+			Object singletonObject = this.singletonObjects.get(beanName);
+			if (singletonObject == null) {
+			    PS 将该bean存入singletonsCurrentlyInCreation 正在创建的bean
+				beforeSingletonCreation(beanName);
+				boolean newSingleton = false;
+				boolean recordSuppressedExceptions = (this.suppressedExceptions == null);
+			
+				try {
+				    调用匿名内部类获取单例对象 从这里开始进入  createBean 5.AbstractBeanFactory 一切从这里开始
+					singletonObject = singletonFactory.getObject();
+					newSingleton = true;
+				}
+				finally {
+					if (recordSuppressedExceptions) {
+						this.suppressedExceptions = null;
+					}
+					afterSingletonCreation(beanName);
+				}
+				if (newSingleton) {
+				//添加 到一级缓存
+					addSingleton(beanName, singletonObject);
+				}
+			}
+			return singletonObject;
+		}
+	}
+5.AbstractBeanFactory
+  5.1createBean
+6.AbstractAutowireCapableBeanFactory
+  6.1doCreateBean 创建bean  BeanWrapper bean的包装类
+  6.2 createBeanInstance 实例化bean的包装类
+7.DefaultSingletonBeanRegistry
+  7.1 加入三级缓存 其实只要是单例bean都要先加入到三级缓存
+  protected void addSingletonFactory(String beanName, ObjectFactory<?> singletonFactory) {
+		synchronized (this.singletonObjects) {
+			if (!this.singletonObjects.containsKey(beanName)) {
+			    加入到三级缓存 注意加入的是 singletonFactory 通过getObject调用匿名内部类 createBean方法去获取bean 
+				this.singletonFactories.put(beanName, singletonFactory);
+				this.earlySingletonObjects.remove(beanName);
+				this.registeredSingletons.add(beanName);
+			}
+		}
+	}
+8.AbstractAutowireCapableBeanFactory
+  8.1  populateBean 填充bean的属性
+  
+      主要是通过后置处理器去处理 主要是CommonAnnotationBeanPostProcessor 后置处理器
+	  for (BeanPostProcessor bp : getBeanPostProcessors()) {
+				if (bp instanceof InstantiationAwareBeanPostProcessor) {
+					InstantiationAwareBeanPostProcessor ibp = (InstantiationAwareBeanPostProcessor) bp;
+					PropertyValues pvsToUse = ibp.postProcessProperties(pvs, bw.getWrappedInstance(), beanName);
+					if (pvsToUse == null) {
+						if (filteredPds == null) {
+							filteredPds = filterPropertyDescriptorsForDependencyCheck(bw, mbd.allowCaching);
+						}
+						pvsToUse = ibp.postProcessPropertyValues(pvs, filteredPds, bw.getWrappedInstance(), beanName);
+						if (pvsToUse == null) {
+							return;
+						}
+					}
+					pvs = pvsToUse;
+				}
+			}
+			
+9.CommonAnnotationBeanPostProcessor 
+  9.1postProcessProperties
+     metadata.inject(bean, beanName, pvs);
+10.InjectionMetadata
+   10.1  element.inject(target, beanName, pvs);
+   10.2  field.set(target, getResourceToInject(target, requestingBeanName));
+11.CommonAnnotationBeanPostProcessor
+  11.1 getResource(this, requestingBeanName));
+  11.2 autowireResource(this.resourceFactory, element, requestingBeanName);
+12. DefaultListableBeanFactory
+  12.1 resolveDependency 解析依赖
+  12.2 doResolveDependency(descriptor, requestingBeanName, autowiredBeanNames, typeConverter); 去解析
+  改方法很重要主要就是处理一些 普通的Bean属性 和 数组 List集合 Map 等数据结构类型的bean属性
+13. DependencyDescriptor 
+  13.1 descriptor.resolveCandidate(autowiredBeanName, type, this);
+    主要是从工厂中获取该需要依赖的 bService  bean
+    public Object resolveCandidate(String beanName, Class<?> requiredType, BeanFactory beanFactory)
+			throws BeansException {
+
+		return beanFactory.getBean(beanName);
+	}
+14. 返回到第一步
+    此时的一级缓存singletonObjects 没有 aService bService  cService
+	二级缓存 earlySingletonObjects 没有 aService bService  cService
+	三级缓存 singletonFactories    只有 aService 并且现在的aService 只是完成了实例化的包装bean 原生的 是在第七步存入三级缓存的
+	
+	bService走的流程和aService是一致的 原生包装bService   bean
+	
+15. bService走到13 步之后 又返回到第一步 去获取cService
+    此时的一级缓存singletonObjects 没有 aService bService  cService
+	二级缓存 earlySingletonObjects 没有 aService bService  cService
+	三级缓存 singletonFactories    只有 aService bService 并且现在的aService bService 只是完成了实例化的包装bean 原生的  是在第七步存入三级缓存的
+	
+	cService走的流程和aService是一致的 原生包装cService   bean
+
+16. 走完13 步之后 又返回到第一步 去获取aService
+17. DefaultSingletonBeanRegistry
+   此时的aService 在三级缓存是存在的 在调用 singletonFactory.getObject()方法的时候 
+   会调用匿名内部类的该方法  () -> getEarlyBeanReference(beanName, mbd, bean
+   protected Object getSingleton(String beanName, boolean allowEarlyReference) {
+	    一级缓存
+		Object singletonObject = this.singletonObjects.get(beanName);
+		一级缓存没有 并且 正在创建的bean   第一次进入改方法 肯定不是 正在创建
+		if (singletonObject == null && isSingletonCurrentlyInCreation(beanName)) {
+			synchronized (this.singletonObjects) {
+			    二级缓存获取
+				singletonObject = this.earlySingletonObjects.get(beanName);
+				二级缓存没有获取到 并且提前引用
+				if (singletonObject == null && allowEarlyReference) {
+				    从三级缓存中获取
+					ObjectFactory<?> singletonFactory = this.singletonFactories.get(beanName);         -----> () -> getEarlyBeanReference(beanName, mbd, bean)
+					if (singletonFactory != null) {
+					    从三级缓存的getObject方法中获取
+						singletonObject = singletonFactory.getObject();
+						this.earlySingletonObjects.put(beanName, singletonObject);
+						this.singletonFactories.remove(beanName);
+					}
+				}
+			}
+		}
+		return singletonObject;  所以直接返回null
+	}
+
+18.AbstractAutowireCapableBeanFactory
+   18.1  这里主要是调用一些后置处理器 对bean的处理  其中 AnnotationAwareAspectJAutoProxyCreator
+   后置处理器 会对AOP处理的类进行代理 生成代理类 判断条件是 看看有没有被加强的方法
+   protected Object getEarlyBeanReference(String beanName, RootBeanDefinition mbd, Object bean) {
+		Object exposedObject = bean;
+		if (!mbd.isSynthetic() && hasInstantiationAwareBeanPostProcessors()) {
+			for (BeanPostProcessor bp : getBeanPostProcessors()) {
+				if (bp instanceof SmartInstantiationAwareBeanPostProcessor) {
+					SmartInstantiationAwareBeanPostProcessor ibp = (SmartInstantiationAwareBeanPostProcessor) bp;
+					exposedObject = ibp.getEarlyBeanReference(exposedObject, beanName);
+				}
+			}
+		}
+		return exposedObject;
+	}
+
+19. AbstractAutoProxyCreator
+   19.1
+   public Object getEarlyBeanReference(Object bean, String beanName) {
+		Object cacheKey = getCacheKey(bean.getClass(), beanName);
+		if (!this.earlyProxyReferences.contains(cacheKey)) {
+			this.earlyProxyReferences.add(cacheKey);
+		}
+		return wrapIfNecessary(bean, beanName, cacheKey);
+	}
+	19.2  获取bean 代理的 或者是原生的  因为aService是有增强的方法 所以是 代理的bean CGLIb动态代理 这里选择CGLib或者JDK动态代理 根据bean的性质 还有配置判断
+     protected Object wrapIfNecessary(Object bean, String beanName, Object cacheKey) {
+		if (StringUtils.hasLength(beanName) && this.targetSourcedBeans.contains(beanName)) {
+			return bean;
+		}
+		if (Boolean.FALSE.equals(this.advisedBeans.get(cacheKey))) {
+			return bean;
+		}
+		if (isInfrastructureClass(bean.getClass()) || shouldSkip(bean.getClass(), beanName)) {
+			this.advisedBeans.put(cacheKey, Boolean.FALSE);
+			return bean;
+		}
+
+		// Create proxy if we have advice.  在这里去判断是否代理该bean
+		Object[] specificInterceptors = getAdvicesAndAdvisorsForBean(bean.getClass(), beanName, null);
+		if (specificInterceptors != DO_NOT_PROXY) {
+			this.advisedBeans.put(cacheKey, Boolean.TRUE);
+			Object proxy = createProxy(
+					bean.getClass(), beanName, specificInterceptors, new SingletonTargetSource(bean));
+			this.proxyTypes.put(cacheKey, proxy.getClass());
+			return proxy;
+		}
+        如果是FASLE 就说明不是被代理的bean
+		this.advisedBeans.put(cacheKey, Boolean.FALSE);
+		return bean;
+	}
+
+
+20 DefaultSingletonBeanRegistry
+   21. 再次回到调用匿名内部类的地方
+  protected Object getSingleton(String beanName, boolean allowEarlyReference) {
+		Object singletonObject = this.singletonObjects.get(beanName);
+		if (singletonObject == null && isSingletonCurrentlyInCreation(beanName)) {
+			synchronized (this.singletonObjects) {
+				singletonObject = this.earlySingletonObjects.get(beanName);
+				if (singletonObject == null && allowEarlyReference) {
+					ObjectFactory<?> singletonFactory = this.singletonFactories.get(beanName);
+					if (singletonFactory != null) {
+					    回到这里 此时的singletonObject 是aService 是代理的bean
+						singletonObject = singletonFactory.getObject();
+						存入二级缓存
+						this.earlySingletonObjects.put(beanName, singletonObject);
+						从三级缓存中移除
+						this.singletonFactories.remove(beanName);
+					}
+				}
+			}
+		}
+		return singletonObject;
+	}
+    此时的
+    此时的一级缓存singletonObjects 没有 aService bService  cService
+	二级缓存 earlySingletonObjects  有 aService 
+	三级缓存 singletonFactories     有 bervice cService 并且现在的bService cService 只是完成了实例化的包装bean 原生的 是在第七步存入三级缓存的
+
+
+
+21. 回到10.2  进行属性赋值 将aService 的代理bean赋值到 cService原生bean的属性中
+22. 回到 8.1  populateBean 填充bean的属性 的下一步 exposedObject = initializeBean(beanName, exposedObject, mbd); 初始化bean  cService
+    22.1 initializeBean
+	在该方法中 会依次执行 beanProcessor 的applyBeanPostProcessorsBeforeInitialization 方法
+	invokeInitMethods 方法 也就是我们 @Bean(initMethod = "init") 方式的 初始化方法
+	applyBeanPostProcessorsAfterInitialization 方法执行 
+	
+	//在这里捋一下 bean初始化前后的时候执行流程
+	第一步 BeanFactoryPostProcessor   postProcessBeanFactory方法
+	第二步 bean的构造方法
+	第三步 bean的属性赋值
+	第四步 BeanPostProcessor  后置处理器 的postProcessBeforeInitialization方法
+	第五步 实现 InitializingBean接口的afterPropertiesSet 方法
+	第六步 @Bean(initMethod = "init") 方式的 初始化方法
+	第七步 BeanPostProcessor  后置处理器 的 postProcessAfterInitialization 方法
+	 
+
+23.AnnotationAwareAspectJAutoProxyCreator的父类 AbstractAutoProxyCreator
+   23.1
+   再次调用 wrapIfNecessary方法 如果存在加强方法则生成代理对象 否则还是原生对象
+24.回到8.1  populateBean 填充bean的属性 的下下一步Object earlySingletonReference = getSingleton(beanName, false);  
+    此时的一级缓存singletonObjects 没有 aService bService  cService
+	二级缓存 earlySingletonObjects  有 aService 
+	三级缓存 singletonFactories     有 bervice cService 并且现在的bService cService 只是完成了实例化的包装bean 原生的 是在第七步存入三级缓存的
+	
+	24.2 回到最终回到 cService的4.1 获取单例缓存
+	调用addSingleton(beanName, singletonObject); 将cService放入一级缓存 此时的cService是代理的bean
+
+	protected void addSingleton(String beanName, Object singletonObject) {
+		synchronized (this.singletonObjects) {
+			this.singletonObjects.put(beanName, singletonObject);
+			this.singletonFactories.remove(beanName);
+			this.earlySingletonObjects.remove(beanName);
+			this.registeredSingletons.add(beanName);
+		}
+	}
+	
+25.返回到 bService 调用属性注入的方法 和13.1类似
+    field.set(target, getResourceToInject(target, requestingBeanName)); bService 注入cService属性 cService 是代理bean
+26. 返回到 populateBean下一步继续执行initializeBean(beanName, exposedObject, mbd);
+    很明显bService返回的是原生的bean
+	为什么false呢？这里主要是获取二级缓存中的bean 如果获取到了 就把二级缓存中的bean赋值到exposedObject 否则还是exposedObject = initializeBean(beanName, exposedObject, mbd);的bean
+	Object earlySingletonReference = getSingleton(beanName, false);
+	
+	
+27.回到10.2  进行属性赋值 将bService 的bean赋值到 aService的bean的属性中
+	field.set(target, getResourceToInject(target, requestingBeanName)); 将bService赋值到aService原生的bean的属性
+28.执行 getSingleton(beanName, false);方法 从二级缓存中获取到了 aService的bean
+   	exposedObject = earlySingletonReference; 赋值给	exposedObject 此时是代理的aService
+	
+	
+	28.2 回到最终回到 aService的4.1 获取单例缓存
+	调用addSingleton(beanName, singletonObject); 将aService放入一级缓存 此时的cService是代理的bean
+
+	protected void addSingleton(String beanName, Object singletonObject) {
+		synchronized (this.singletonObjects) {
+			this.singletonObjects.put(beanName, singletonObject);
+			this.singletonFactories.remove(beanName);
+			this.earlySingletonObjects.remove(beanName);
+			this.registeredSingletons.add(beanName);
+		}
+	}
+	
+    此时
+	此时的一级缓存singletonObjects  有 aService 代理bean bService  cService 代理bean
+	二级缓存 earlySingletonObjects  全无 
+	三级缓存 singletonFactories     全无
+   
+
